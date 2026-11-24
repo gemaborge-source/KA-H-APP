@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Urbanist:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
 /* Quisans — reemplazar src con los archivos .woff2 reales cuando estén disponibles */
 @font-face {
@@ -89,6 +90,95 @@
 }
 
 /* Dark mode removed — only light theme */
+
+/* ==================== AUTH SCREEN ==================== */
+#auth-overlay {
+  position: fixed; inset: 0; z-index: 10002;
+  background: var(--bg);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 24px 20px;
+  animation: obFadeIn 0.4s ease;
+}
+.auth-container {
+  width: 100%; max-width: 380px; text-align: center;
+}
+.auth-logo { margin-bottom: 24px; }
+.auth-title {
+  font-family: var(--font-detail);
+  font-size: 28px; font-weight: 700; color: var(--text);
+  margin-bottom: 6px;
+}
+.auth-subtitle {
+  font-size: 14px; color: var(--text-secondary);
+  margin-bottom: 32px;
+}
+.auth-form { display: flex; flex-direction: column; gap: 14px; }
+.auth-input-group {
+  position: relative; text-align: left;
+}
+.auth-input-group label {
+  display: block; font-size: 12px; font-weight: 600;
+  color: var(--text-secondary); margin-bottom: 5px;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.auth-input-group input {
+  width: 100%; padding: 14px 16px; border: 2px solid var(--border);
+  border-radius: var(--radius-sm); font-family: var(--font-body);
+  font-size: 16px; background: var(--bg-card); color: var(--text);
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+.auth-input-group input:focus {
+  outline: none; border-color: var(--accent);
+}
+.auth-btn {
+  width: 100%; padding: 16px; border: none; border-radius: var(--radius-sm);
+  background: var(--accent-gradient); color: #fff;
+  font-family: var(--font-body); font-size: 16px; font-weight: 700;
+  cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;
+  margin-top: 8px;
+}
+.auth-btn:active { transform: scale(0.97); }
+.auth-btn:disabled {
+  opacity: 0.6; cursor: not-allowed; transform: none;
+}
+.auth-toggle {
+  margin-top: 20px; font-size: 14px; color: var(--text-secondary);
+}
+.auth-toggle a {
+  color: var(--accent); font-weight: 600; cursor: pointer;
+  text-decoration: none;
+}
+.auth-error {
+  background: var(--accent-light); color: var(--accent);
+  padding: 10px 14px; border-radius: var(--radius-sm);
+  font-size: 13px; text-align: left; display: none;
+}
+.auth-divider {
+  display: flex; align-items: center; gap: 12px;
+  margin: 8px 0; color: var(--text-muted); font-size: 13px;
+}
+.auth-divider::before, .auth-divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
+}
+.auth-skip {
+  background: none; border: 2px solid var(--border); color: var(--text-secondary);
+  padding: 14px; border-radius: var(--radius-sm); cursor: pointer;
+  font-family: var(--font-body); font-size: 14px; font-weight: 600;
+  width: 100%; transition: all 0.2s;
+}
+.auth-skip:hover { border-color: var(--text-secondary); color: var(--text); }
+.auth-sync-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border-radius: 20px;
+  font-size: 12px; font-weight: 600;
+}
+.auth-sync-badge.synced {
+  background: var(--positive-dim); color: var(--positive);
+}
+.auth-sync-badge.local {
+  background: var(--warning-dim); color: #9A7200;
+}
 
 /* ==================== ONBOARDING ==================== */
 #onboarding-overlay {
@@ -3856,6 +3946,361 @@ function updateProfileAvatar() {
 // (old AVATAR_OPTIONS object removed)
 
 // (old buildAvatarSVG, showAvatarTab, updateAvatarPreview, openAvatarCreator, saveAvatar, updateProfileAvatar removed — replaced above)
+
+// ========== SUPABASE ==========
+const SUPABASE_URL = 'https://ezupoxdpqalpktemwtyu.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV6dXBveGRwcWFscGt0ZW13dHl1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU1MjI3MzQsImV4cCI6MjExMTA5ODczNH0.QnjjMcxKBcL6fcvIV8w4_0cgT6usXG1Z-ZS7QtXR-hs';
+
+let supabase = null;
+let supabaseUser = null;
+let syncInProgress = false;
+let syncDebounceTimer = null;
+
+// Initialize Supabase client
+function initSupabase() {
+  try {
+    if (window.supabase && window.supabase.createClient) {
+      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      console.log('[KA$H] Supabase initialized');
+    } else {
+      console.warn('[KA$H] Supabase SDK not loaded, running in offline mode');
+    }
+  } catch(e) {
+    console.error('[KA$H] Error initializing Supabase:', e);
+  }
+}
+
+// ========== AUTH ==========
+function showAuthScreen() {
+  // Don't show if already authenticated or if Supabase not available
+  if (supabaseUser || !supabase) return;
+
+  let existing = document.getElementById('auth-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'auth-overlay';
+  overlay.innerHTML = `
+    <div class="auth-container">
+      <div class="auth-logo">${foxNeutral(80)}</div>
+      <div class="auth-title">KA$H</div>
+      <div class="auth-subtitle">Tu ecosistema financiero personal</div>
+
+      <div id="auth-error" class="auth-error"></div>
+
+      <form id="auth-form" class="auth-form" onsubmit="handleAuth(event)">
+        <div id="auth-name-group" class="auth-input-group" style="display:none;">
+          <label>Nombre</label>
+          <input type="text" id="auth-name" placeholder="Tu nombre" autocomplete="name">
+        </div>
+        <div class="auth-input-group">
+          <label>Email</label>
+          <input type="email" id="auth-email" placeholder="tu@email.com" required autocomplete="email">
+        </div>
+        <div class="auth-input-group">
+          <label>Contraseña</label>
+          <input type="password" id="auth-password" placeholder="Mínimo 6 caracteres" required minlength="6" autocomplete="current-password">
+        </div>
+        <button type="submit" class="auth-btn" id="auth-submit-btn">Iniciar sesión</button>
+      </form>
+
+      <div class="auth-toggle">
+        <span id="auth-toggle-text">¿No tienes cuenta? </span>
+        <a onclick="toggleAuthMode();" id="auth-toggle-link">Crear cuenta</a>
+      </div>
+
+      <div class="auth-divider">o</div>
+
+      <button class="auth-skip" onclick="skipAuth()">
+        Usar sin cuenta (solo local)
+      </button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+
+let authMode = 'login'; // 'login' | 'register'
+
+function toggleAuthMode() {
+  authMode = authMode === 'login' ? 'register' : 'login';
+  const nameGroup = document.getElementById('auth-name-group');
+  const submitBtn = document.getElementById('auth-submit-btn');
+  const toggleText = document.getElementById('auth-toggle-text');
+  const toggleLink = document.getElementById('auth-toggle-link');
+
+  if (authMode === 'register') {
+    nameGroup.style.display = 'block';
+    submitBtn.textContent = 'Crear cuenta';
+    toggleText.textContent = '¿Ya tienes cuenta? ';
+    toggleLink.textContent = 'Iniciar sesión';
+    document.getElementById('auth-password').autocomplete = 'new-password';
+  } else {
+    nameGroup.style.display = 'none';
+    submitBtn.textContent = 'Iniciar sesión';
+    toggleText.textContent = '¿No tienes cuenta? ';
+    toggleLink.textContent = 'Crear cuenta';
+    document.getElementById('auth-password').autocomplete = 'current-password';
+  }
+  document.getElementById('auth-error').style.display = 'none';
+}
+
+async function handleAuth(e) {
+  e.preventDefault();
+  const btn = document.getElementById('auth-submit-btn');
+  const errorEl = document.getElementById('auth-error');
+  const email = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+
+  btn.disabled = true;
+  btn.textContent = authMode === 'login' ? 'Entrando...' : 'Creando cuenta...';
+  errorEl.style.display = 'none';
+
+  try {
+    let result;
+    if (authMode === 'register') {
+      const name = document.getElementById('auth-name').value.trim();
+      result = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { display_name: name || '' } }
+      });
+    } else {
+      result = await supabase.auth.signInWithPassword({ email, password });
+    }
+
+    if (result.error) {
+      let msg = result.error.message;
+      // Translate common errors
+      if (msg.includes('Invalid login')) msg = 'Email o contraseña incorrectos';
+      else if (msg.includes('already registered')) msg = 'Este email ya tiene una cuenta. Inicia sesión.';
+      else if (msg.includes('Password should be')) msg = 'La contraseña debe tener al menos 6 caracteres';
+      else if (msg.includes('valid email')) msg = 'Introduce un email válido';
+      else if (msg.includes('Email not confirmed')) msg = 'Confirma tu email antes de iniciar sesión. Revisa tu bandeja de entrada.';
+
+      errorEl.textContent = msg;
+      errorEl.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = authMode === 'login' ? 'Iniciar sesión' : 'Crear cuenta';
+      return;
+    }
+
+    if (authMode === 'register' && result.data?.user && !result.data.session) {
+      // Email confirmation required
+      errorEl.textContent = '¡Cuenta creada! Revisa tu email para confirmar y luego inicia sesión.';
+      errorEl.style.display = 'block';
+      errorEl.style.background = 'var(--positive-dim)';
+      errorEl.style.color = 'var(--positive)';
+      btn.disabled = false;
+      btn.textContent = 'Crear cuenta';
+      authMode = 'login';
+      toggleAuthMode();
+      return;
+    }
+
+    // Success
+    supabaseUser = result.data.user;
+    document.getElementById('auth-overlay')?.remove();
+
+    // Sync: download cloud state or upload local state
+    await syncAfterLogin();
+
+  } catch(err) {
+    errorEl.textContent = 'Error de conexión. Inténtalo de nuevo.';
+    errorEl.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = authMode === 'login' ? 'Iniciar sesión' : 'Crear cuenta';
+  }
+}
+
+function skipAuth() {
+  document.getElementById('auth-overlay')?.remove();
+  console.log('[KA$H] Running in offline/local mode');
+}
+
+// ========== CLOUD SYNC ==========
+async function syncAfterLogin() {
+  if (!supabase || !supabaseUser) return;
+
+  try {
+    // Check if user has cloud state
+    const { data: cloudState, error } = await supabase
+      .from('user_states')
+      .select('*')
+      .eq('user_id', supabaseUser.id)
+      .eq('context', 'personal')
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      // PGRST116 = no rows, anything else is a real error
+      console.error('[KA$H] Error fetching cloud state:', error);
+      showToast('Error al sincronizar. Usando datos locales.', 'warning');
+      return;
+    }
+
+    const hasLocalData = localStorage.getItem('cash_state_v2') !== null;
+    const hasCloudData = cloudState && cloudState.state_data && Object.keys(cloudState.state_data).length > 0;
+
+    if (hasCloudData && hasLocalData) {
+      // Both exist — cloud data takes priority (last saved wins by version)
+      const cloudVersion = cloudState.version || 0;
+      const localData = JSON.parse(localStorage.getItem('cash_state_v2'));
+      // Use cloud data
+      personalState = migrateState(cloudState.state_data);
+      state = personalState;
+      localStorage.setItem('cash_state_v2', JSON.stringify(personalState));
+      console.log('[KA$H] Loaded state from cloud (version ' + cloudVersion + ')');
+      showToast('Datos sincronizados desde la nube ☁️', 'success');
+    } else if (hasCloudData && !hasLocalData) {
+      // Only cloud data — download it
+      personalState = migrateState(cloudState.state_data);
+      state = personalState;
+      localStorage.setItem('cash_state_v2', JSON.stringify(personalState));
+      needsOnboarding = false;
+      console.log('[KA$H] Downloaded state from cloud');
+      showToast('Datos descargados desde la nube ☁️', 'success');
+    } else if (!hasCloudData && hasLocalData) {
+      // Only local data — upload it
+      await uploadStateToCloud('personal');
+      console.log('[KA$H] Uploaded local state to cloud');
+      showToast('Datos subidos a la nube ☁️', 'success');
+    }
+    // else: neither has data — fresh start, onboarding will handle it
+
+    // Also sync shared state if exists
+    const shLocal = localStorage.getItem('cash_state_v2_shared');
+    if (shLocal) {
+      await uploadStateToCloud('shared');
+    } else {
+      const { data: shCloud } = await supabase
+        .from('user_states')
+        .select('state_data')
+        .eq('user_id', supabaseUser.id)
+        .eq('context', 'shared')
+        .single();
+      if (shCloud?.state_data && Object.keys(shCloud.state_data).length > 0) {
+        sharedState = migrateState(shCloud.state_data);
+        localStorage.setItem('cash_state_v2_shared', JSON.stringify(sharedState));
+      }
+    }
+
+    // Update profile from local settings
+    await syncProfileToCloud();
+
+    render();
+  } catch(e) {
+    console.error('[KA$H] Sync error:', e);
+    showToast('Error de sincronización. Usando datos locales.', 'warning');
+  }
+}
+
+async function uploadStateToCloud(context) {
+  if (!supabase || !supabaseUser) return;
+
+  const stateData = context === 'shared' ? sharedState : personalState;
+  if (!stateData) return;
+
+  try {
+    // Upsert — insert or update
+    const { error } = await supabase
+      .from('user_states')
+      .upsert({
+        user_id: supabaseUser.id,
+        context: context,
+        state_data: stateData,
+        version: (stateData._cloudVersion || 0) + 1,
+        last_synced_at: new Date().toISOString()
+      }, { onConflict: 'user_id,context' });
+
+    if (error) {
+      console.error('[KA$H] Upload error:', error);
+      return false;
+    }
+    return true;
+  } catch(e) {
+    console.error('[KA$H] Upload exception:', e);
+    return false;
+  }
+}
+
+async function syncProfileToCloud() {
+  if (!supabase || !supabaseUser || !state?.settings) return;
+
+  try {
+    await supabase
+      .from('profiles')
+      .update({
+        display_name: state.settings.userName || '',
+        avatar: state.settings.avatar || 'fox',
+        onboarding_completed: !needsOnboarding
+      })
+      .eq('id', supabaseUser.id);
+  } catch(e) {
+    console.error('[KA$H] Profile sync error:', e);
+  }
+}
+
+// Debounced cloud sync — called from safeSave
+function debouncedCloudSync() {
+  if (!supabase || !supabaseUser) return;
+  if (syncDebounceTimer) clearTimeout(syncDebounceTimer);
+  syncDebounceTimer = setTimeout(async () => {
+    if (syncInProgress) return;
+    syncInProgress = true;
+    try {
+      await uploadStateToCloud(currentContext);
+      updateSyncIndicator(true);
+    } catch(e) {
+      console.error('[KA$H] Background sync error:', e);
+      updateSyncIndicator(false);
+    } finally {
+      syncInProgress = false;
+    }
+  }, 3000); // Sync 3 seconds after last change
+}
+
+function updateSyncIndicator(synced) {
+  const el = document.getElementById('sync-indicator');
+  if (!el) return;
+  if (synced) {
+    el.className = 'auth-sync-badge synced';
+    el.innerHTML = '☁️ Sincronizado';
+  } else {
+    el.className = 'auth-sync-badge local';
+    el.innerHTML = '📱 Solo local';
+  }
+}
+
+// Check auth state on load
+async function checkAuthState() {
+  if (!supabase) return;
+
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      supabaseUser = session.user;
+      console.log('[KA$H] Session restored for:', session.user.email);
+      // Sync silently in background
+      await syncAfterLogin();
+      return true;
+    }
+  } catch(e) {
+    console.error('[KA$H] Auth check error:', e);
+  }
+  return false;
+}
+
+async function logoutSupabase() {
+  if (!supabase) return;
+  // Upload final state before logout
+  if (supabaseUser) {
+    await uploadStateToCloud('personal');
+    if (sharedState) await uploadStateToCloud('shared');
+  }
+  await supabase.auth.signOut();
+  supabaseUser = null;
+  showToast('Sesión cerrada. Tus datos siguen guardados localmente.', 'info');
+  render();
+}
 
 // ========== STATE ==========
 let state;
@@ -13049,6 +13494,7 @@ function renderProfileSettings() {
   if (grpData) grpData.innerHTML = [
     profileRow('🔐','rgba(232,120,138,0.1)','Seguridad',`PIN ${sec.pinEnabled?'activado':'desactivado'} · Bloqueo ${sec.autoLock?'activo':'inactivo'}`,'openProfileSecurity()'),
     profileRow('🛡️','rgba(45,122,79,0.1)','Privacidad y datos','Exportar, importar, eliminar datos','openProfilePrivacy()'),
+    profileRow('☁️','rgba(91,175,214,0.1)','Cuenta en la nube', supabaseUser ? `${supabaseUser.email}` : 'Sin cuenta — solo local', 'openProfileCloud()'),
   ].join('');
 }
 function openProfilePersonal() {
@@ -13838,6 +14284,8 @@ function safeSave() {
       localStorage.setItem(key + '_backup_ts', new Date().toISOString());
     }
     localStorage.setItem(key, data);
+    // Sync to cloud (debounced)
+    debouncedCloudSync();
     return true;
   } catch(e) {
     cashError('safeSave', e, 'Error al guardar datos. Intentando recuperar...');
@@ -14255,6 +14703,67 @@ function openProfilePrivacy() {
       <button class="btn-outline" style="width:100%;padding:10px;font-size:12px;color:var(--danger);border-color:var(--danger);margin-top:10px;" onclick="deleteAllData()">Eliminar mi cuenta y datos</button>
     </div>`;
   openModal('modal-profile-edit');
+}
+
+function openProfileCloud() {
+  currentProfileEdit = 'cloud';
+  document.getElementById('profile-edit-title').textContent = 'Cuenta en la nube';
+
+  const loggedIn = !!supabaseUser;
+  const email = supabaseUser?.email || '';
+
+  document.getElementById('profile-edit-content').innerHTML = loggedIn ? `
+    <div class="data-card">
+      <div class="data-card-title">☁️ Cuenta conectada</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:8px;">
+        <div style="width:40px;height:40px;border-radius:50%;background:var(--accent-gradient);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:18px;">${(email[0]||'?').toUpperCase()}</div>
+        <div>
+          <div style="font-weight:600;color:var(--text);">${state.settings?.userName || 'Usuario'}</div>
+          <div style="font-size:12px;color:var(--text-secondary);">${email}</div>
+        </div>
+      </div>
+    </div>
+    <div class="data-card">
+      <div class="data-card-title">🔄 Sincronización</div>
+      <div class="data-card-desc">Tus datos se sincronizan automáticamente con la nube cada vez que haces cambios. Puedes acceder desde cualquier dispositivo.</div>
+      <button class="btn-primary" style="width:100%;padding:10px;font-size:13px;margin-top:10px;" onclick="forceSyncNow()">Sincronizar ahora</button>
+    </div>
+    <div class="data-card">
+      <button class="btn-outline" style="width:100%;padding:10px;font-size:13px;color:var(--text-secondary);" onclick="closeModal('modal-profile-edit');logoutSupabase();">Cerrar sesión</button>
+    </div>
+  ` : `
+    <div class="data-card">
+      <div class="data-card-title">📱 Modo local</div>
+      <div class="data-card-desc">Tus datos están guardados solo en este dispositivo. Crea una cuenta para sincronizar en la nube y acceder desde cualquier lugar.</div>
+    </div>
+    <div class="data-card">
+      <div class="data-card-title">☁️ Ventajas de la cuenta</div>
+      <div class="data-card-desc" style="line-height:1.8;">
+        ✓ Accede desde cualquier dispositivo<br>
+        ✓ Copia de seguridad automática<br>
+        ✓ Sincronización en tiempo real<br>
+        ✓ Comparte finanzas con tu pareja
+      </div>
+      <button class="btn-primary" style="width:100%;padding:12px;font-size:14px;margin-top:12px;" onclick="closeModal('modal-profile-edit');showAuthScreen();">Crear cuenta gratuita</button>
+    </div>
+  `;
+  openModal('modal-profile-edit');
+}
+
+async function forceSyncNow() {
+  if (!supabase || !supabaseUser) {
+    showToast('No hay cuenta conectada', 'warning');
+    return;
+  }
+  showToast('Sincronizando...', 'info');
+  try {
+    const ok = await uploadStateToCloud(currentContext);
+    if (sharedState) await uploadStateToCloud('shared');
+    await syncProfileToCloud();
+    showToast(ok !== false ? 'Sincronizado correctamente ☁️' : 'Error al sincronizar', ok !== false ? 'success' : 'error');
+  } catch(e) {
+    showToast('Error al sincronizar', 'error');
+  }
 }
 
 function exportDataCSV() {
@@ -14755,18 +15264,31 @@ function finishOnboarding() {
   setTimeout(() => {
     showToast('¡Bienvenid@ a KA$H, ' + (name || 'amig@') + '! 🦊', 'success');
   }, 500);
+
+  // Offer cloud account after onboarding
+  if (supabase && !supabaseUser) {
+    setTimeout(() => showAuthScreen(), 1500);
+  }
 }
 
 // ========== INIT ==========
+initSupabase();
 loadState();
 initAcademyState();
 render();
 // B11: Apply appearance, notifications badge, PIN check, inactivity timer
 applyAppearanceSettings();
-setTimeout(() => {
+setTimeout(async () => {
   updateNotifBadge();
+
+  // Check if user has an existing Supabase session
+  const hasSession = await checkAuthState();
+
   if (needsOnboarding) {
     showOnboarding();
+  } else if (!hasSession && supabase) {
+    // Not logged in and Supabase available — show auth screen
+    showAuthScreen();
   } else {
     const sec = state?.settings?.security || {};
     if (sec.pinEnabled && sec.pin) showPinScreen('unlock');
