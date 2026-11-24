@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Urbanist:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js" async></script>
 <style>
 /* Quisans — reemplazar src con los archivos .woff2 reales cuando estén disponibles */
 @font-face {
@@ -3972,7 +3972,21 @@ function initSupabase() {
       supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       console.log('[KA$H] Supabase initialized');
     } else {
-      console.warn('[KA$H] Supabase SDK not loaded, running in offline mode');
+      console.warn('[KA$H] Supabase SDK not loaded yet, will retry...');
+      // Retry after SDK loads asynchronously
+      let retries = 0;
+      const retryInit = setInterval(() => {
+        retries++;
+        if (window.supabase && window.supabase.createClient) {
+          supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+          console.log('[KA$H] Supabase initialized (async)');
+          clearInterval(retryInit);
+          checkAuthState();
+        } else if (retries > 20) {
+          console.warn('[KA$H] Supabase SDK not available, running offline');
+          clearInterval(retryInit);
+        }
+      }, 500);
     }
   } catch(e) {
     console.error('[KA$H] Error initializing Supabase:', e);
